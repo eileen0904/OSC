@@ -1,0 +1,9 @@
+
+.vscode/
+/build
+*.d
+*.o
+*.obj
+*.elf
+*.DS_Store
+*.img
