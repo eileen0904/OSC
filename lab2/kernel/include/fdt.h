@@ -2,6 +2,7 @@
 #define _FDT_H
 
 #include <stdint.h>
+#include <sys/types.h>
 
 /* stored in big-endian format */
 struct fdt_header {
@@ -56,8 +57,14 @@ struct fdt_property {
 #define fdtp_len(fdtp) (fdtp_get_header(fdtp, len))
 #define fdtp_nameoff(fdtp) (fdtp_get_header(fdtp, nameoff))
 
-static inline uint32_t fdt32_ld(const void *p) {
-    return be32_to_cpu(*(const uint32_t *)p);
+// Load fdt32 (big-endian)
+static inline uint32_t fdt32_ld(const uint32_t *p) {
+    const uint8_t *bp = (const uint8_t *)p;
+
+    return ((uint32_t)bp[0] << 24)
+        | ((uint32_t)bp[1] << 16)
+        | ((uint32_t)bp[2] << 8)
+        | bp[3];
 }
 
 typedef uint32_t (*fdt_callback)(int type, char *name, char *data, uint32_t size);

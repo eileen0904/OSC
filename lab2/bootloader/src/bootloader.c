@@ -1,5 +1,6 @@
 #include "bootloader.h"
 #include "mini_uart.h"
+#include "func.h"
 
 extern char _kernel[];
 
@@ -16,15 +17,14 @@ void load_img(char *fdt) {
     unsigned int len;
     char *p = _kernel;
 
-    uart_printf("[*] Kernel base address: %x\r\n", _kernel);
-
-    len = uart_recv_uint();
-
-    uart_printf("[*] Kernel image length: %d\r\n", len);
-
-    while(len--) 
-        *p++ = uart_recv();
-
-    // Execute kernel
+    for(int i = 0; i < 4; i++) {
+        len <<= 8;
+        len |= uart_recv_uint();
+    }
+    while(len--){
+        *p = uart_recv_raw();
+        uart_send(*p);
+        p++;
+    }
     ((kernel_funcp)_kernel)(fdt);
 }

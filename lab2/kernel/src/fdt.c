@@ -3,7 +3,6 @@
 #include "func.h"
 
 char *cpio_file; // Device Tree Base Address
-
 void print_tab(int level) {
     while (level--){
         uart_printf("\t");
@@ -52,7 +51,7 @@ uint32_t print_dtb(int type, char *name, char *data, uint32_t size) {
 }
 
 uint32_t get_initramfs_addr(int type, char *name, char *data, uint32_t size) {
-    if(type == FDT_PROP && same(name, "linux,initrd-start")) {
+    if(type == FDT_PROP && !strcmp(name, "linux,initrd-start")) {
         cpio_file = (char *)(uintptr_t)fdt32_ld((void *)data);
         uart_printf("initramfs_addr: %x\r\n", cpio_file);
     }
@@ -106,12 +105,7 @@ uint32_t fdt_traverse(fdt_callback cb, char *dtb) {
     char *dt_struct = dtb + fdt_off_dt_struct(header);
     char *dt_strings = dtb + fdt_off_dt_strings(header);
 
-    uint32_t off_dt_struct = fdt_get_header(header, off_dt_struct);
-    char *dt_struct = (char *)header + off_dt_struct;
-    char *ptr = dt_struct;
-    char *name;
-
-    uint32_t r = parse_dt_struct(cb, dt_struct, dt_strings);
+    uint32_t r = parse_dtb(cb, dt_struct, dt_strings);
 
     return r;
 }

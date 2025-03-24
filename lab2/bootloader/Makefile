@@ -1,7 +1,7 @@
 ARMGNU ?= aarch64-linux-gnu
 
-COPS = -Wall -nostdlib -nostartfiles -ffreestanding -Iinclude -mgeneral-regs-only
-ASMOPS = -Iinclude 
+COPS = -Wall -nostdlib -nostartfiles -ffreestanding -Iinclude -mgeneral-regs-only -g
+ASMOPS = -Iinclude -g
 
 BUILD_DIR = build
 SRC_DIR = src
@@ -31,4 +31,7 @@ bootloader.img: $(SRC_DIR)/linker.ld $(OBJ_FILES)
 	$(ARMGNU)-objcopy $(BUILD_DIR)/bootloader.elf -O binary bootloader.img
 
 run:
-	qemu-system-aarch64 -machine raspi3b -kernel bootloader.img -serial null -serial pty
+	qemu-system-aarch64 -machine raspi3b -kernel bootloader.img -serial null -serial pty -initrd ../create_fs/initramfs.cpio -dtb ../bcm2710-rpi-3-b-plus.dtb
+
+debug:
+	qemu-system-aarch64 -machine raspi3b -kernel bootloader.img  -initrd ../create_fs/initramfs.cpio -dtb ../bcm2710-rpi-3-b-plus.dtb -serial null -serial stdio -s -S

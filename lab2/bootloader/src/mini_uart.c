@@ -39,8 +39,24 @@ char uart_recv() {
     while(!(get32(AUX_MU_LSR_REG) & 0x01));
     char r = (char)(get32(AUX_MU_IO_REG));
 
-    return r == '\r' ? '\n' : r;
+    return r == '\r' ? '\r\n' : r;
 }
+
+char uart_recv_raw() {
+    while(!(get32(AUX_MU_LSR_REG) & 0x01))
+        ;
+    char r = (char)(get32(AUX_MU_IO_REG));
+
+    return r ;
+}
+
+unsigned int uart_recv_uint() {
+    unsigned int r = 0;
+    while(!(get32(AUX_MU_LSR_REG) & 0x01));
+    r = (unsigned int)(get32(AUX_MU_IO_REG));
+    return r;
+}
+
 
 void uart_send(char c) {
     while(!(get32(AUX_MU_LSR_REG) & 0x20));

@@ -1,8 +1,8 @@
-#include "mini_uart.h"
 #include "shell.h"
 #include "func.h"
 #include "mailbox.h"
-#include "bootloader.h"
+#include "mini_uart.h"
+#include "reboot.h"
 
 void input(char *cmd) {
     char c;
@@ -38,7 +38,7 @@ void shell(char *fdt) {
 
     input(cmd);
     char *buffer = cmd;
-    while (1) {
+    while(1) {
         if(*buffer == '\0') {
             argv = buffer;
             break;
@@ -51,22 +51,17 @@ void shell(char *fdt) {
         buffer++;
     }
 
-    uart_send('\n');
-
+    uart_send_string("\r\n");
 
     if(strcmp(cmd, "help") == 0) {
         do_help();
-    }
-    else if(strcmp(cmd, "hello") == 0) {
+    } else if(strcmp(cmd, "hello") == 0) {
         do_hello();
-    }
-    else if(strcmp(cmd, "mailbox") == 0) {
+    } else if(strcmp(cmd, "mailbox") == 0) {
         do_mailbox();
-    }
-    else if(strcmp(cmd, "loadimg") == 0) {
-        load_img(fdt);
-    }
-    else {
+    } else if(strcmp(cmd, "reboot") == 0) {
+        reset(10);
+    } else {
         uart_send_string("Unknown command\r\n");
     }
 }
@@ -77,9 +72,7 @@ void do_help() {
     uart_send_string("mailbox : print hardware's information\r\n");
 }
 
-void do_hello() {
-    uart_send_string("Hello World!\r\n");
-}
+void do_hello() { uart_send_string("Hello World!\r\n"); }
 
 void do_mailbox() {
     get_board_revision();

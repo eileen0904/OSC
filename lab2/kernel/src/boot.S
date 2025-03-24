@@ -22,5 +22,6 @@ master:
 	mov sp, x1
     
     mov x0, x19         // get fdt back
+
 	bl  main
 	b 	proc_hang

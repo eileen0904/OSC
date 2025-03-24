@@ -22,5 +22,7 @@ void uart_send_string(char *str);
 void uart_send_hex(unsigned int num);
 void uart_printf(char *fmt, ...);
 void uart_send_num(int64_t num, int base, int type);
+unsigned int uart_recv_uint();
+char uart_recv_raw();
 
 #endif /*_P_MINI_UART_H */

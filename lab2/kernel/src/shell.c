@@ -1,9 +1,10 @@
-#include "mini_uart.h"
 #include "shell.h"
-#include "func.h"
-#include "mailbox.h"
 #include "_cpio.h"
 #include "fdt.h"
+#include "func.h"
+#include "mailbox.h"
+#include "mini_uart.h"
+#include "reboot.h"
 
 void input(char *cmd) {
     char c;
@@ -52,8 +53,7 @@ void shell(char *fdt) {
         buffer++;
     }
 
-    uart_send('\n');
-
+    uart_send_string("\r\n");
 
     if(strcmp(cmd, "help") == 0) {
         do_help();
@@ -78,16 +78,24 @@ void shell(char *fdt) {
     }
     else if(strcmp(cmd, "dtb") == 0) {
         do_dtb(fdt);
-    }
+    } else if(strcmp(cmd, "reboot") == 0) {
+        reset(10);
+    } 
     else {
         uart_send_string("Unknown command\r\n");
     }
 }
 
 void do_help() {
-    uart_send_string("help    : print this help menu\r\n");
-    uart_send_string("hello   : print Hello World!\r\n");
-    uart_send_string("mailbox : print hardware's information\r\n");
+    uart_send_string("help           : print this help menu\r\n");
+    uart_send_string("hello          : print Hello World!\r\n");
+    uart_send_string("mailbox        : print hardware's information\r\n");
+    uart_send_string("ls             : list file\r\n");
+    uart_send_string("cat <filename> : print file\r\n");
+    uart_send_string("memAlloc       : test the allocator\r\n");
+    uart_send_string("get_initramd   : get initial ramdisk\r\n");
+    uart_send_string("dtb            : print the device tree\r\n");
+    uart_send_string("reboot         : reboot the board\r\n");
 }
 
 void do_hello() {
@@ -106,7 +114,7 @@ void do_ls() {
 void do_cat(char *argv) {
     uart_send_string("Filename: ");
     uart_send_string(argv);
-    uart_send_string("\n");
+    uart_send_string("\r\n");
     cpio_parse_file(0, argv);
 }
 
@@ -120,9 +128,9 @@ void do_memAlloc() {
     str2[9] = '\0';
 
     uart_send_string(str);
-    uart_send_string("\n");
+    uart_send_string("\r\n");
     uart_send_string(str2);
-    uart_send_string("\n");
+    uart_send_string("\r\n");
 }
 
 void do_get_initramd(char *fdt) { // use devicetree to get initial ramdisk

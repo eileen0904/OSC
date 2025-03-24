@@ -42,7 +42,7 @@ char uart_recv() {
         ;
     char r = (char)(get32(AUX_MU_IO_REG));
 
-    return r == '\r' ? '\n' : r;
+    return r == '\r' ? '\r\n' : r;
 }
 
 void uart_send(char c) {
