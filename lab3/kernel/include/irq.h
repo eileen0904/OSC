@@ -16,8 +16,4 @@
 #define CORE0_INT_SRC (0x40000060)
 #define CORE0_TIMER_IRQ_CTRL (0x40000040)
 
-void irq(int d);
-void change_read_irq(int d);
-void change_write_irq(int d);
-
 #endif /*_P_IRQ_H */

@@ -20,18 +20,7 @@ struct cpio_newc_header {
     char c_check[8];
 };
 
-struct c_file {
-    char datas[100000];
-    char names[10000];
-    int names_pos[1024];
-    int datas_pos[1024];
-    int n;
-};
-
 unsigned int hex_to_int(const char *hex, int len);
-void cpio_parse_file();
-void cpio_ls();
-void cpio_cat(char *file);
-void cpio_load(char *str);
+void cpio_parse_file(int flag, char *file);
 
 #endif /* _CPIO_H_ */

@@ -15,12 +15,6 @@
 #define AUX_MU_CNTL_REG (PBASE + 0x00215060) // transmitter and receiver
 #define AUX_MU_BAUD_REG (PBASE + 0x00215068) // 270:Set baud rate to 115200
 
-#define UART_FBRD (PBASE + 0x00201028) /* RFractional Baud Rate Divisor */
-#define UART_LCRH (PBASE + 0x0020102C) /* Line Control Register */
-#define UART_CR (PBASE + 0x00201030) /* Control Register */
-#define UART_IMSC (PBASE + 0x00201038) /* Interupt FIFO Level Select Register */
-#define UART_ICR (PBASE + 0x00201044) /* Interupt Clear Register */
-
 void uart_init(void);
 char uart_recv(void);
 void uart_send(char c);
@@ -28,11 +22,13 @@ void uart_send_string(char *str);
 void uart_send_hex(unsigned int num);
 void uart_printf(char *fmt, ...);
 void uart_send_num(int64_t num, int base, int type);
-void uart_irq_on();
-void uart_irq_off();
-void uart_irq_send(char *str);
-void uart_irq_read(char *str);
-void write_handler();
-void recv_handler();
+
+void uart_interrupt_enable();
+void uart_interrupt_disable();
+char uart_async_getc();
+void uart_async_putc(char c);
+int uart_puts(char *fmt, ...);
+void uart_r_irq_handler();
+void uart_w_irq_handler();
 
 #endif /*_P_MINI_UART_H */

@@ -5,16 +5,16 @@
 char *cpio_file; // Device Tree Base Address
 void print_tab(int level) {
     while (level--){
-        uart_printf("\t");
+        uart_async_putc("\t");
     }
 }
 
 void dump(char *start, int len) {
     for(int i = 0; i < len; i++) {
         if (start[i] >= 0x20 && start[i] <= 0x7e)
-            uart_send(start[i]);
+            uart_async_putc(start[i]);
         else
-            uart_send_hex(start[i]);
+            uart_puts("%x", start[i]);
     }
 }
 
@@ -29,22 +29,22 @@ uint32_t print_dtb(int type, char *name, char *data, uint32_t size) {
     static int tb = 0;
     if(type == FDT_BEGIN_NODE) {
         print_tab(tb);
-        uart_printf("[*] Node: %s\r\n", name);
+        uart_puts("[*] Node: %s\r\n", name);
         tb++;
     }
     else if(type == FDT_END_NODE) {
         tb--;
         print_tab(tb);
-        uart_send_string("[*] Node: end\r\n");
+        uart_puts("[*] Node: end\r\n");
     }
     else if(type == FDT_PROP) {
         print_tab(tb);
         uart_printf("[*] %s: ", name);
         dump(data, size);
-        uart_send_string("\r\n");
+        uart_puts("\r\n");
     }
     else {
-        uart_send_string("[*] END!\r\n");
+        uart_puts("[*] END!\r\n");
     }
 
     return 0;
@@ -53,7 +53,7 @@ uint32_t print_dtb(int type, char *name, char *data, uint32_t size) {
 uint32_t get_initramfs_addr(int type, char *name, char *data, uint32_t size) {
     if(type == FDT_PROP && !strcmp(name, "linux,initrd-start")) {
         cpio_file = (char *)(uintptr_t)fdt32_ld((void *)data);
-        uart_printf("initramfs_addr: %x\r\n", cpio_file);
+        uart_puts("initramfs_addr: %x\r\n", cpio_file);
     }
     return 0;
 }
@@ -98,7 +98,7 @@ uint32_t fdt_traverse(fdt_callback cb, char *dtb) {
     struct fdt_header *header = (struct fdt_header *)dtb;
 
     if(fdt_magic(header) != FDT_MAGIC) {
-        uart_send_string("Invalid FDT magic\n");
+        uart_puts("Invalid FDT magic\n");
         return;
     }
 

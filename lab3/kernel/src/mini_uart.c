@@ -1,16 +1,18 @@
 #include "mini_uart.h"
+#include "exception.h"
 #include "gpio.h"
-#include "utils.h"
 #include "irq.h"
+#include "utils.h"
+#include "func.h"
 #include <stdarg.h>
 #include <stdint.h>
 
 #define SIGN 1
 
-char write_buffer[1024];
-int write_tail = 0, write_idx = 0;
-char recv_buffer[1024];
-int recv_tail = 0, recv_idx = 0;
+char tx_buffer[1024] = {};
+unsigned int tx_widx = 0, tx_ridx = 0;
+char rx_buffer[1024] = {};
+unsigned int rx_widx = 0, rx_ridx = 0;
 
 void uart_init(void) {
     /* Init UART */
@@ -41,12 +43,6 @@ void uart_init(void) {
     put32(GPPUDCLK0, 0);
 
     put32(AUX_MU_CNTL_REG, 3); // Enable transmitter and receiver
-
-    put32(UART_ICR, 0x7FF); /* clear interrupts */
-    put32(UART_FBRD, 0xB);
-    put32(UART_LCRH, (0b11 << 5)); /* 8n1 */
-    put32(UART_CR, 0x301); /* enable Tx, Rx, FIFO */
-    put32(UART_IMSC, (3 << 4)); /* Tx, Rx */
 }
 
 char uart_recv() {
@@ -159,49 +155,85 @@ void uart_printf(char *fmt, ...) {
     }
 }
 
-void uart_irq_on() {
-    change_read_irq(1);
-    put32(ENABLE_IRQS_1, get32(ENABLE_IRQS_1) | (1 << 29));
+void uart_interrupt_enable() {
+    put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) | 1); // enable read interrupt
+    put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) | 2); // enable write interrupt
+    put32(ENABLE_IRQS_1, get32(AUX_MU_IER_REG) | 1 << 29);
 }
 
-void uart_irq_off() {
-    change_read_irq(0);
-    put32(DISABLE_IRQS_1, get32(DISABLE_IRQS_1) | (1 << 29));
+void uart_interrupt_disable() {
+    put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) & ~(1)); // disable read interrupt
+    put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) & ~(2)); // disable write interrupt
 }
 
-void uart_irq_send(char *str) {
-    for(int i = 0; str[i] != '\0'; i++) {
-        write_buffer[write_tail++] = str[i];
+int uart_puts(char *fmt, ...) {
+    __builtin_va_list args;
+    __builtin_va_start(args, fmt);
+    char buf[1024];
+
+    char *str = (char *)buf;
+    int count = vsprintf(str, fmt, args);
+
+    while(*str) {
+        if(*str == '\n')
+            uart_async_putc('\r');
+        uart_async_putc(*str++);
     }
-    change_write_irq(1);
+    __builtin_va_end(args);
+    return count;
 }
 
-void uart_irq_read(char *str) {
-    int ind = 0;
-    while(recv_idx < recv_tail) {
-        str[ind++] = recv_buffer[recv_idx++];
-    }
+// read from buffer
+char uart_async_getc() {
+    put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) | 1); // enable read interrupt
+
+    while(rx_ridx == rx_widx)
+        put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) | 1); // enable read interrupt
+    
+    el1_interrupt_disable();
+
+    char r = rx_buffer[rx_ridx++];
+    if(rx_ridx >= 1024) rx_ridx = 0;
+    
+    el1_interrupt_enable();
+    return r;
 }
 
-void write_handler() {
-    irq(0);
+// writes to buffer
+void uart_async_putc(char c) {
+    // if buffer full, wait for uart_w_irq_handler
+    while((tx_widx + 1) % 1024 == tx_ridx)
+        put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) | 2); // enable write interrupt
+    
+    el1_interrupt_disable();
 
-    while(write_idx != write_tail) {
-        char c = write_buffer[write_idx++];
-        put32(AUX_MU_IO_REG, (unsigned int)c);
-    }
-
-    irq(1);
+    tx_buffer[tx_widx++] = c;
+    if(tx_widx >= 1024) tx_widx = 0; // cycle pointer
+    
+    el1_interrupt_enable();
+    put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) | 2); // enable write interrupt
 }
 
-void recv_handler() {
-    irq(0);
-
-    char c = (char)get32(AUX_MU_IO_REG);
-    if(c != 0) {
-        recv_buffer[recv_tail++] = c;
+// write to buffer then output
+void uart_r_irq_handler() {
+    if((rx_widx + 1) % 1024 == rx_ridx) {
+        put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) & ~(1));  // disable read interrupt
+        return;
     }
-    change_read_irq(1);
 
-    irq(1);
+    rx_buffer[rx_widx++] = uart_recv();
+    if(rx_widx >= 1024) rx_widx = 0;
+    put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) | 1); // enable read interrupt
+}
+
+// read from buffer then output
+void uart_w_irq_handler() {
+    if(tx_ridx == tx_widx) {
+        put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) & ~(2));  // disable write interrupt
+        return;  // buffer empty
+    }
+
+    uart_send(tx_buffer[tx_ridx++]);
+    if(tx_ridx >= 1024) tx_ridx = 0;
+    put32(AUX_MU_IER_REG, get32(AUX_MU_IER_REG) | 2); // enable write interrupt
 }

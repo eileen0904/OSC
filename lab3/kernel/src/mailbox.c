@@ -37,12 +37,12 @@ void get_board_revision() {
     mailbox[6] = END_TAG;
 
     if(mailbox_call(mailbox)) {
-        uart_send_string("Board Revision: 0x"); // it should be 0xa020d3 for rpi3 b+
-        uart_send_hex(mailbox[5]);
-        uart_send_string("\r\n");
+        uart_puts("Board Revision: 0x"); // it should be 0xa020d3 for rpi3 b+
+        uart_puts("%x", mailbox[5]);
+        uart_puts("\r\n");
     }
     else {
-        uart_send_string("Failed to get Board Revision\r\n");
+        uart_puts("Failed to get Board Revision\r\n");
     }
 }
 
@@ -60,15 +60,15 @@ void get_arm_memory() {
     mailbox[7] = END_TAG;
 
     if(mailbox_call(mailbox)) {
-        uart_send_string("ARM memory base address: 0x");
-        uart_send_hex(mailbox[5]);
-        uart_send_string("\r\n");
+        uart_puts("ARM memory base address: 0x");
+        uart_puts("%x", mailbox[5]);
+        uart_puts("\r\n");
 
-        uart_send_string("ARM memory size: 0x");
-        uart_send_hex(mailbox[6]);
-        uart_send_string("\r\n");
+        uart_puts("ARM memory size: 0x");
+        uart_puts("%x", mailbox[6]);
+        uart_puts("\r\n");
     }
     else {
-        uart_send_string("Failed to get ARM memory info\r\n");
+        uart_puts("Failed to get ARM memory info\r\n");
     }
 }

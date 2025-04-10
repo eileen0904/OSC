@@ -5,55 +5,49 @@
 #include "mailbox.h"
 #include "mini_uart.h"
 #include "reboot.h"
+#include "timer.h"
 
 void input(char *cmd) {
     char c;
     int idx = 0;
 
-    while((c = uart_recv()) != '\n') {
+    for(int i = 0; i < 100; i++) {
+        cmd[i] = '\0';
+    }
+
+    while((c = uart_async_getc()) != '\n') {
         cmd[idx++] = c;
-        uart_send(c);
+        uart_async_putc(c);
     }
     cmd[idx] = '\0';
 }
 
-void parse_cmd(char *cmd, char *argv) {
-    char *buffer = cmd;
+char *parse_cmd(char *cmd) {
+    char *argv;
     while(1) {
-        if(*buffer == '\0') {
-            argv = buffer;
+        if(*cmd == '\0') {
+            argv = cmd;
             break;
         }
-        if(*buffer == ' ') {
-            *buffer = '\0';
-            argv = buffer + 1;
+        if(*cmd == ' ') {
+            *cmd = '\0';
+            argv = cmd + 1;
             break;
         }
-        buffer++;
+        cmd++;
     }
+    return argv;
 }
 
 void shell(char *fdt) {
-    uart_send_string("# ");
+    uart_puts("# ");
 
-    char cmd[100], *argv;
+    char cmd[100];
 
     input(cmd);
-    char *buffer = cmd;
-    while (1) {
-        if(*buffer == '\0') {
-            argv = buffer;
-            break;
-        }
-        if(*buffer == ' ') {
-            *buffer = '\0';
-            argv = buffer + 1;
-            break;
-        }
-        buffer++;
-    }
+    char *argv = parse_cmd(cmd);
 
-    uart_send_string("\r\n");
+    uart_puts("\r\n");
 
     if(strcmp(cmd, "help") == 0) {
         do_help();
@@ -65,7 +59,7 @@ void shell(char *fdt) {
         do_mailbox();
     }
     else if(strcmp(cmd, "ls") == 0) {
-        cpio_ls();
+        cpio_parse_file(1, "NO_FILE");
     }
     else if(strcmp(cmd, "cat") == 0) {
         do_cat(argv);
@@ -81,34 +75,37 @@ void shell(char *fdt) {
     } else if(strcmp(cmd, "reboot") == 0) {
         reset(10);
     }
-    else if(strcmp(cmd, "load") == 0) {
-        cpio_load(argv);
+    else if(strcmp(cmd, "exec") == 0) {
+        cpio_parse_file(3, argv);
     }
-    else if(strcmp(cmd, "async") == 0) {
-        do_async_test();
-    } 
     else if(strcmp(cmd, "setTimeout") == 0){
-        setTimeout();
-    }
-    else {
-        uart_send_string("Unknown command\r\n");
+        char *sec = parse_cmd(argv);
+        do_setTimeout(argv, sec);
+    } 
+    else if(strcmp(cmd, "set2sAlert") == 0) {
+        do_set2sAlert();
+    } else {
+        uart_puts("Unknown command\r\n");
     }
 }
 
 void do_help() {
-    uart_send_string("help           : print this help menu\r\n");
-    uart_send_string("hello          : print Hello World!\r\n");
-    uart_send_string("mailbox        : print hardware's information\r\n");
-    uart_send_string("ls             : list file\r\n");
-    uart_send_string("cat <filename> : print file\r\n");
-    uart_send_string("memAlloc       : test the allocator\r\n");
-    uart_send_string("get_initramd   : get initial ramdisk\r\n");
-    uart_send_string("dtb            : print the device tree\r\n");
-    uart_send_string("reboot         : reboot the board\r\n");
+    uart_puts("help            : print this help menu\r\n");
+    uart_puts("hello           : print Hello World!\r\n");
+    uart_puts("mailbox         : print hardware's information\r\n");
+    uart_puts("ls              : list file\r\n");
+    uart_puts("cat <filename>  : print file\r\n");
+    uart_puts("memAlloc        : test the allocator\r\n");
+    uart_puts("get_initramd    : get initial ramdisk\r\n");
+    uart_puts("dtb             : print the device tree\r\n");
+    uart_puts("reboot          : reboot the board\r\n");
+    uart_puts("exec <filename> : execute a command, replacing current image with a new image\r\n");
+    uart_puts("setTimeout [MESSAGE] [SECONDS]\r\n");
+    uart_puts("set2sAlert      : set core timer interrupt every 2 second\r\n");
 }
 
 void do_hello() {
-    uart_send_string("Hello World!\r\n");
+    uart_puts("Hello World!\r\n");
 }
 
 void do_mailbox() {
@@ -117,10 +114,8 @@ void do_mailbox() {
 }
 
 void do_cat(char *argv) {
-    uart_send_string("Filename: ");
-    uart_send_string(argv);
-    uart_send_string("\r\n");
-    cpio_cat(argv);
+    uart_puts("Filename: %s\r\n", argv);
+    cpio_parse_file(2, argv);
 }
 
 void do_memAlloc() {
@@ -132,10 +127,8 @@ void do_memAlloc() {
     for(int i = 0; i < 9; i++) str2[i] = 'b';
     str2[9] = '\0';
 
-    uart_send_string(str);
-    uart_send_string("\r\n");
-    uart_send_string(str2);
-    uart_send_string("\r\n");
+    uart_puts("%s\r\n", str);
+    uart_puts("%s\r\n", str2);
 }
 
 void do_get_initramd(char *fdt) { // use devicetree to get initial ramdisk
@@ -146,33 +139,10 @@ void do_dtb(char *fdt) { // print the device tree
     fdt_traverse(print_dtb, fdt);
 }
 
-void do_async_test(){
-    uart_irq_on();
-
-    uart_irq_send("Test\r\n\0");
-
-    int t = 100000000;
-    while(t--);
-
-    char *str = simple_alloc(100);
-    uart_irq_read(str);
-
-    t = 10000000;
-    while(t--);
-
-    uart_irq_off();
-    uart_printf("%s, End\r\n", str);
+void do_setTimeout(char *msg, char *sec) {
+    add_timer(uart_printf, str_to_int(sec), msg);
 }
 
-void setTimeout() {
-    char buf[1024];
-    uart_printf("Input time(ms): ");
-    input(buf);
-    unsigned long t = stoi(buf);
-    uart_printf("\r\n");
-    uart_printf("Input data to output: ");
-    input(buf);
-    uart_printf("\r\n");
-    set_timeout(t, buf);
+void do_set2sAlert() {
+    add_timer(timer_set2sAlert, 2, "2sAlert");
 }
-

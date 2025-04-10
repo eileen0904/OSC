@@ -1,5 +1,3 @@
-#define CORE0_TIMER_IRQ_CTRL 0x40000040
-
 // save general registers to stack
 .macro save_all
     sub sp, sp, 32 * 9
@@ -19,21 +17,16 @@
     stp x26, x27, [sp ,16 * 13]
     stp x28, x29, [sp ,16 * 14]
     str x30, [sp, 16 * 15]
-	// empty 8 bytes
-
-	mrs x0, SPSR_EL1
-	mrs x1, ELR_EL1
-	stp x0, x1, [sp, 16 * 16]
-	// nested
-
+	// information for nested interrupt
+    mrs x0, spsr_el1
+    str x0, [sp, 16 * 16]
+    mrs x0, elr_el1
+    str x0, [sp, 16 * 17]
+    ldp x0, x1, [sp ,16 * 0]  // restore x0 instead of elr_el1
 .endm
 
 // load general registers from stack
-.macro load_all
-	ldp x0, x1,  [sp, 16 * 16]
-	msr SPSR_EL1, x0
-	msr ELR_EL1,  x1
-    
+.macro load_all    
 	ldp x0, x1, [sp ,16 * 0]
     ldp x2, x3, [sp ,16 * 1]
     ldp x4, x5, [sp ,16 * 2]
@@ -50,97 +43,144 @@
     ldp x26, x27, [sp ,16 * 13]
     ldp x28, x29, [sp ,16 * 14]
     ldr x30, [sp, 16 * 15]
-
-    add sp, sp, 32 * 9 
+    // information for nested interrupt
+    ldr x0, [sp, 16 * 16]
+    msr spsr_el1,x0
+    ldr x0, [sp, 16 * 17]
+    msr elr_el1, x0
+    ldp x0, x1, [sp ,16 * 0]  // restore x0 instead of elr_el1
+    add sp, sp, 32 * 9
 .endm
 
-exception_handler:
-    save_all
-    bl exception_entry
-    load_all
-    eret
+.macro    ventry    label
+    .align    7   // entry should be aligned to 0x80 (2^7)
+    b    \label
+.endm
 
-irq_handler:
-    save_all
-    bl irq_current_el_spx
-    load_all
-    eret
-
-undefined_exception:
-	bl c_undefined_exception
-
-.align 11 // vector table should be aligned to 0x800
+.align 11         // vector table should be aligned to 0x800 (2^11)
 .global exception_vector_table
 exception_vector_table:
-    // Exception from the current EL while using SP_EL0
-    b undefined_exception 
-    .align 7
-    b undefined_exception 
-    .align 7
-    b undefined_exception
-    .align 7
-    b undefined_exception
-    .align 7
+    //Exception from the current EL while using SP_EL0
+    ventry    el1t_sync_invalid        // Synchronous EL1t
+    ventry    el1t_irq_invalid         // IRQ EL1t
+    ventry    el1t_fiq_invalid         // FIQ EL1t
+    ventry    el1t_error_invalid       // Error EL1t
 
-    // Exception from the current EL while using SP_ELx
-    b undefined_exception 
-    .align 7
-    b irq_handler
-    .align 7
-    b undefined_exception 
-    .align 7
-    b undefined_exception 
-    .align 7
+    //Exception from the current EL while using SP_ELx
+    ventry    el1h_sync                // Synchronous EL1h
+    ventry    el1h_irq                 // IRQ EL1h
+    ventry    el1h_fiq_invalid         // FIQ EL1h
+    ventry    el1h_error_invalid       // Error EL1h
 
-    b exception_handler
-    .align 7
-    b undefined_exception
-    .align 7
-    b undefined_exception
-    .align 7
-    b undefined_exception
-    .align 7
+    //Exception from a lower EL and at least one lower EL is AArch64
+    ventry    el0_sync_64             // Synchronous 64-bit EL0
+    ventry    el0_irq_64              // IRQ 64-bit EL0
+    ventry    el0_fiq_invalid_64      // FIQ 64-bit EL0
+    ventry    el0_error_invalid_64    // Error 64-bit EL0
 
-    b undefined_exception 
-    .align 7
-    b undefined_exception 
-    .align 7
-    b undefined_exception
-    .align 7
-    b undefined_exception
-    .align 7
+    //Exception from a lower EL and at least all lower EL are AArch32
+    ventry    el0_sync_invalid_32     // Synchronous 32-bit EL0
+    ventry    el0_irq_invalid_32      // IRQ 32-bit EL0
+    ventry    el0_fiq_invalid_32      // FIQ 32-bit EL0
+    ventry    el0_error_invalid_32    // Error 32-bit EL0
 
-.global core_timer_enable
-core_timer_enable:
-    mov x0, 1
-    msr cntp_ctl_el0, x0
-    // mrs x0, cntfrq_el0
-    mov x0, 0 
-    msr cntp_tval_el0, x0
-    mov x0, 2
-    ldr x1, =CORE0_TIMER_IRQ_CTRL
-    str w0, [x1]
-    ret
 
-core_timer_handler:
+el1t_sync_invalid:
     save_all
-    bl core_timer_entry 
+    mov x0,0
+    bl invalid_exception_router
+    load_all
+    eret
+el1t_irq_invalid:
+    save_all
+    mov x0,1
+    bl invalid_exception_router
+    load_all
+    eret
+el1t_fiq_invalid:
+    save_all
+    mov x0,2
+    bl invalid_exception_router
+    load_all
+    eret
+el1t_error_invalid:
+    save_all
+    mov x0,3
+    bl invalid_exception_router
     load_all
     eret
 
-.global to_el0_with_timer
-to_el0_with_timer:
-	mov x29, lr
-	bl from_el1_to_el0
-	bl core_timer_enable
-	b proc_hang
-	mov lr, x29
-	ret
+el1h_sync:
+    save_all
+    mov x0,4
+    bl invalid_exception_router
+    load_all
+    eret
+el1h_irq:
+    save_all
+    mov x0,5
+    bl el1h_irq_router
+    load_all
+    eret
+el1h_fiq_invalid:
+    save_all
+    mov x0,6
+    bl invalid_exception_router
+    load_all
+    eret
+el1h_error_invalid:
+    save_all
+    mov x0,7
+    bl invalid_exception_router
+    load_all
+    eret
 
-from_el1_to_el0:
-    mov x0, 0x340 
-    msr spsr_el1, x0
-    ldr x0, =0x100000
-    msr sp_el0, x0
-    msr elr_el1, lr
+el0_sync_64:
+    save_all
+    mov x0,8
+    bl el0_sync_router
+    load_all
+    eret
+el0_irq_64:
+    save_all
+    mov x0,9
+    bl el0_irq_64_router
+    load_all
+    eret
+el0_fiq_invalid_64:
+    save_all
+    mov x0,10
+    bl invalid_exception_router
+    load_all
+    eret
+el0_error_invalid_64:
+    save_all
+    mov x0,11
+    bl invalid_exception_router
+    load_all
+    eret
+
+el0_sync_invalid_32:
+    save_all
+    mov x0,12
+    bl invalid_exception_router
+    load_all
+    eret
+el0_irq_invalid_32:
+    save_all
+    mov x0,13
+    bl invalid_exception_router
+    load_all
+    eret
+el0_fiq_invalid_32:
+    save_all
+    mov x0,14
+    bl invalid_exception_router
+    load_all
+    eret
+el0_error_invalid_32:
+    save_all
+    mov x0,15
+    bl invalid_exception_router
+    load_all
     eret
